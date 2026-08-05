@@ -53,9 +53,12 @@ paths:
       description: |
         Faz upload de um arquivo via `multipart/form-data`.
 
-        O backend aceita o arquivo no campo `file` e um responsável opcional em `owner`.
-        Quando `owner` não é informado, a API usa o header `x-user-id` se estiver presente,
-        e caso contrário grava `anonymous` como dono do documento.
+        O backend aceita o arquivo no campo `file` e um responsável em `owner`.
+        O valor de `owner` deve ser o mesmo enviado no header `x-user-id`.
+
+        Quando o header não é informado, o backend assume `anonymous`.
+        Uploads aceitos: PDF, TXT, PNG, JPG/JPEG, DOC e DOCX.
+        Tamanho máximo: 10 MB.
       parameters:
         - name: x-user-id
           in: header
@@ -78,9 +81,10 @@ paths:
                   description: Arquivo do documento.
                 owner:
                   type: string
-                  description: Dono do documento. Opcional.
+                  description: Dono do documento (deve ser igual ao `x-user-id`).
               required:
                 - file
+                - owner
             examples:
               uploadWithOwner:
                 summary: Upload com owner informado
@@ -113,6 +117,29 @@ paths:
                 missingFile:
                   value:
                     message: Arquivo não enviado.
+                unsupportedFileType:
+                  value:
+                    message: Tipo de arquivo não permitido.
+        '403':
+          description: Regra de ownership violada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                ownerMismatch:
+                  value:
+                    message: O owner informado difere do usuário autenticado.
+        '413':
+          description: Arquivo acima do limite permitido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                fileTooLarge:
+                  value:
+                    message: Arquivo excede o limite de 10 MB.
         '500':
           description: Erro interno
           content:
@@ -130,6 +157,15 @@ paths:
         - Documents
       summary: Lista os documentos cadastrados
       operationId: listDocuments
+      description: Retorna apenas documentos do usuário indicado em `x-user-id` (ou `anonymous`).
+      parameters:
+        - name: x-user-id
+          in: header
+          required: false
+          description: Identificador opcional do usuário para escopo dos documentos.
+          schema:
+            type: string
+          example: ana.silva
       responses:
         '200':
           description: Lista de documentos
@@ -167,6 +203,13 @@ paths:
       summary: Faz download de um documento
       operationId: downloadDocument
       parameters:
+        - name: x-user-id
+          in: header
+          required: false
+          description: Identificador opcional do usuário dono do documento.
+          schema:
+            type: string
+          example: ana.silva
         - name: id
           in: path
           required: true
@@ -192,7 +235,17 @@ paths:
               examples:
                 invalidId:
                   value:
-                    message: ID do documento é obrigatório.
+                    message: ID do documento inválido.
+        '403':
+          description: Usuário sem permissão para baixar o documento
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                forbidden:
+                  value:
+                    message: Acesso negado a este documento.
         '404':
           description: Documento ou arquivo não encontrado
           content:

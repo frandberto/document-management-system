@@ -3,45 +3,56 @@ class DocumentsController {
     this.documentsService = documentsService;
   }
 
-  upload = (req, res) => {
+  getRequesterId(req) {
+    const requesterId = req.header('x-user-id');
+    return requesterId?.trim() || 'anonymous';
+  }
+
+  upload = async (req, res, next) => {
+    const requesterId = this.getRequesterId(req);
+    const ownerFromBody = req.body?.owner?.trim();
+
+    if (ownerFromBody && ownerFromBody !== requesterId) {
+      return res.status(403).json({
+        message: 'O owner informado difere do usuário autenticado.',
+      });
+    }
+
     try {
-      const owner = req.body?.owner || req.header('x-user-id') || 'anonymous';
-      const document = this.documentsService.uploadDocument(req.file, owner);
+      const document = this.documentsService.uploadDocument(req.file, requesterId);
       return res.status(201).json(document);
     } catch (error) {
-      const statusCode = error.statusCode || 500;
-      return res.status(statusCode).json({
-        message: error.message || 'Erro interno ao fazer upload.',
-      });
+      return next(error);
     }
   };
 
-  list = (req, res) => {
+  list = async (req, res, next) => {
+    const requesterId = this.getRequesterId(req);
+
     try {
-      const documents = this.documentsService.listDocuments();
+      const documents = this.documentsService.listDocuments(requesterId);
       return res.json(documents);
-    } catch {
-      return res.status(500).json({
-        message: 'Erro interno ao listar documentos.',
-      });
+    } catch (error) {
+      return next(error);
     }
   };
 
-  download = (req, res) => {
+  download = async (req, res, next) => {
+    const { id } = req.params;
+    const requesterId = this.getRequesterId(req);
+
+    if (!id) {
+      return res.status(400).json({ message: 'ID do documento é obrigatório.' });
+    }
+
     try {
-      const { id } = req.params;
-
-      if (!id) {
-        return res.status(400).json({ message: 'ID do documento é obrigatório.' });
-      }
-
-      const { document, filePath } = this.documentsService.getDocumentForDownload(id);
+      const { document, filePath } = await this.documentsService.getDocumentForDownload(
+        id,
+        requesterId,
+      );
       return res.download(filePath, document.originalName);
     } catch (error) {
-      const statusCode = error.statusCode || 500;
-      return res.status(statusCode).json({
-        message: error.message || 'Erro interno ao baixar documento.',
-      });
+      return next(error);
     }
   };
 }

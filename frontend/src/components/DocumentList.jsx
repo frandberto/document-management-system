@@ -18,7 +18,7 @@ function formatSize(bytes) {
   return `${mb.toFixed(1)} MB`;
 }
 
-export default function DocumentList({ documents, isLoading }) {
+export default function DocumentList({ documents, isLoading, onDownload, isDownloading }) {
   return (
     <section>
       <h2>Documentos</h2>
@@ -40,7 +40,11 @@ export default function DocumentList({ documents, isLoading }) {
               <p style={{ margin: '0.35rem 0' }}>
                 Tamanho: {formatSize(document.size)} | Dono: {document.owner || 'anonymous'}
               </p>
-              <DownloadButton document={document} />
+              <DownloadButton
+                document={document}
+                onDownload={onDownload}
+                isDownloading={isDownloading}
+              />
             </li>
           ))}
         </ul>

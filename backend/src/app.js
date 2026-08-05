@@ -11,18 +11,47 @@
 // usando multer com diskStorage. Não utilize provedores externos.
 
 const express = require('express');
-const documentsRouter = require('./routes/documents.routes');
+const multer = require('multer');
+const createDocumentsRouter = require('./routes/documents.routes');
 
-const app = express();
 const PORT = process.env.PORT || 3000;
+function createApp() {
+  const app = express();
 
-app.use(express.json());
-app.use(documentsRouter);
+  app.use(express.json());
+  app.use(createDocumentsRouter());
 
-// Endpoint de verificação de saúde.
-app.get('/health', (req, res) => {
-  res.json({ status: 'ok' });
-});
+  // Endpoint de verificação de saúde.
+  app.get('/health', (req, res) => {
+    res.json({ status: 'ok' });
+  });
+
+  app.use((error, req, res, next) => {
+    if (res.headersSent) {
+      next(error);
+      return;
+    }
+
+    if (error instanceof multer.MulterError) {
+      if (error.code === 'LIMIT_FILE_SIZE') {
+        res.status(413).json({ message: 'Arquivo excede o limite de 10 MB.' });
+        return;
+      }
+
+      res.status(400).json({ message: error.message || 'Erro ao processar upload.' });
+      return;
+    }
+
+    const statusCode = error.statusCode || 500;
+    res.status(statusCode).json({
+      message: error.message || 'Erro interno do servidor.',
+    });
+  });
+
+  return app;
+}
+
+const app = createApp();
 
 if (require.main === module) {
   app.listen(PORT, () => {
@@ -31,3 +60,4 @@ if (require.main === module) {
 }
 
 module.exports = app;
+module.exports.createApp = createApp;

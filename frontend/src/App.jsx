@@ -1,12 +1,19 @@
 import { useCallback, useEffect, useState } from 'react';
 import UploadComponent from './components/UploadComponent';
 import DocumentList from './components/DocumentList';
-import { listDocuments, uploadDocument } from './services/documentsApi';
+import {
+  downloadDocument,
+  getCurrentUserId,
+  listDocuments,
+  setCurrentUserId,
+  uploadDocument,
+} from './services/documentsApi';
 
 export default function App() {
   const [documents, setDocuments] = useState([]);
   const [isLoadingDocuments, setIsLoadingDocuments] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
 
@@ -24,6 +31,7 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    setCurrentUserId(getCurrentUserId());
     loadDocuments();
   }, [loadDocuments]);
 
@@ -43,6 +51,20 @@ export default function App() {
     }
   }
 
+  async function handleDownload(document) {
+    setIsDownloading(true);
+    setErrorMessage('');
+    setSuccessMessage('');
+
+    try {
+      await downloadDocument(document.id, document.originalName);
+    } catch (error) {
+      setErrorMessage(error.message || 'Erro ao baixar documento.');
+    } finally {
+      setIsDownloading(false);
+    }
+  }
+
   return (
     <main style={{ fontFamily: 'system-ui, sans-serif', padding: '2rem', maxWidth: '900px' }}>
       <h1>Document Management System</h1>
@@ -59,7 +81,12 @@ export default function App() {
 
       <hr style={{ margin: '2rem 0' }} />
 
-      <DocumentList documents={documents} isLoading={isLoadingDocuments} />
+      <DocumentList
+        documents={documents}
+        isLoading={isLoadingDocuments}
+        onDownload={handleDownload}
+        isDownloading={isDownloading}
+      />
     </main>
   );
 }

@@ -1,15 +1,11 @@
-import { getDownloadUrl } from '../services/documentsApi';
-
-export default function DownloadButton({ document }) {
-  const downloadUrl = getDownloadUrl(document.id);
-
-  function handleDownload() {
-    window.location.href = downloadUrl;
+export default function DownloadButton({ document, onDownload, isDownloading }) {
+  async function handleDownload() {
+    await onDownload(document);
   }
 
   return (
-    <button type="button" onClick={handleDownload}>
-      Baixar
+    <button type="button" onClick={handleDownload} disabled={isDownloading}>
+      {isDownloading ? 'Baixando...' : 'Baixar'}
     </button>
   );
 }
