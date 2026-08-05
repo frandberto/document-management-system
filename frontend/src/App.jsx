@@ -1,20 +1,92 @@
-// Seed do componente raiz do Document Management System.
-//
-// Este é apenas um ponto de partida mínimo. Durante o Passo 3 você vai usar o
-// Agent Mode do GitHub Copilot para construir os componentes:
-//   - components/UploadComponent
-//   - components/DocumentList
-//   - components/DownloadButton
-// e o serviço services/ que consome a API do backend via fetch.
+import { useCallback, useEffect, useState } from 'react';
+import UploadComponent from './components/UploadComponent';
+import DocumentList from './components/DocumentList';
+import {
+  downloadDocument,
+  getCurrentUserId,
+  listDocuments,
+  setCurrentUserId,
+  uploadDocument,
+} from './services/documentsApi';
 
 export default function App() {
+  const [documents, setDocuments] = useState([]);
+  const [isLoadingDocuments, setIsLoadingDocuments] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
+
+  const loadDocuments = useCallback(async () => {
+    setIsLoadingDocuments(true);
+
+    try {
+      const data = await listDocuments();
+      setDocuments(data);
+    } catch (error) {
+      setErrorMessage(error.message || 'Erro ao carregar documentos.');
+    } finally {
+      setIsLoadingDocuments(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    setCurrentUserId(getCurrentUserId());
+    loadDocuments();
+  }, [loadDocuments]);
+
+  async function handleUpload(payload) {
+    setIsUploading(true);
+    setErrorMessage('');
+    setSuccessMessage('');
+
+    try {
+      await uploadDocument(payload);
+      setSuccessMessage('Documento enviado com sucesso.');
+      await loadDocuments();
+    } catch (error) {
+      setErrorMessage(error.message || 'Erro ao enviar documento.');
+    } finally {
+      setIsUploading(false);
+    }
+  }
+
+  async function handleDownload(document) {
+    setIsDownloading(true);
+    setErrorMessage('');
+    setSuccessMessage('');
+
+    try {
+      await downloadDocument(document.id, document.originalName);
+    } catch (error) {
+      setErrorMessage(error.message || 'Erro ao baixar documento.');
+    } finally {
+      setIsDownloading(false);
+    }
+  }
+
   return (
-    <main style={{ fontFamily: 'system-ui, sans-serif', padding: '2rem' }}>
+    <main style={{ fontFamily: 'system-ui, sans-serif', padding: '2rem', maxWidth: '900px' }}>
       <h1>Document Management System</h1>
-      <p>
-        Seed do frontend. Construa a interface durante o Passo 3 usando o Agent
-        Mode do GitHub Copilot.
-      </p>
+
+      {errorMessage ? (
+        <p style={{ color: '#b30000', fontWeight: 600 }}>{errorMessage}</p>
+      ) : null}
+
+      {successMessage ? (
+        <p style={{ color: '#006b2d', fontWeight: 600 }}>{successMessage}</p>
+      ) : null}
+
+      <UploadComponent onUpload={handleUpload} isUploading={isUploading} />
+
+      <hr style={{ margin: '2rem 0' }} />
+
+      <DocumentList
+        documents={documents}
+        isLoading={isLoadingDocuments}
+        onDownload={handleDownload}
+        isDownloading={isDownloading}
+      />
     </main>
   );
 }

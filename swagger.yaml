@@ -1,0 +1,334 @@
+openapi: 3.1.0
+info:
+  title: Document Management System API
+  version: 0.1.0
+  description: |
+    API do backend do Document Management System.
+
+    Os arquivos são gravados no filesystem local da aplicação e os metadados ficam em memória.
+    Isso significa que os documentos cadastrados são perdidos quando o processo backend reinicia.
+
+servers:
+  - url: http://localhost:3000
+    description: Servidor local de desenvolvimento
+
+tags:
+  - name: Health
+    description: Verificação de saúde da API
+  - name: Documents
+    description: Operações de upload, listagem e download de documentos
+
+paths:
+  /health:
+    get:
+      tags:
+        - Health
+      summary: Verifica se a API está saudável
+      operationId: getHealth
+      responses:
+        '200':
+          description: API operacional
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                properties:
+                  status:
+                    type: string
+                    const: ok
+                required:
+                  - status
+              examples:
+                success:
+                  value:
+                    status: ok
+
+  /upload:
+    post:
+      tags:
+        - Documents
+      summary: Envia um documento
+      operationId: uploadDocument
+      description: |
+        Faz upload de um arquivo via `multipart/form-data`.
+
+        O backend aceita o arquivo no campo `file` e um responsável em `owner`.
+        O valor de `owner` deve ser o mesmo enviado no header `x-user-id`.
+
+        Quando o header não é informado, o backend assume `anonymous`.
+        Uploads aceitos: PDF, TXT, PNG, JPG/JPEG, DOC e DOCX.
+        Tamanho máximo: 10 MB.
+      parameters:
+        - name: x-user-id
+          in: header
+          required: false
+          description: Identificador opcional do usuário dono do documento.
+          schema:
+            type: string
+          example: ana.silva
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: Arquivo do documento.
+                owner:
+                  type: string
+                  description: Dono do documento (deve ser igual ao `x-user-id`).
+              required:
+                - file
+                - owner
+            examples:
+              uploadWithOwner:
+                summary: Upload com owner informado
+                value:
+                  owner: ana.silva
+      responses:
+        '201':
+          description: Documento enviado com sucesso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Document'
+              examples:
+                success:
+                  value:
+                    id: 550e8400-e29b-41d4-a716-446655440000
+                    originalName: contrato.pdf
+                    storedName: 1722859200000-123456789.pdf
+                    mimeType: application/pdf
+                    size: 245678
+                    owner: ana.silva
+                    uploadedAt: 2026-08-05T12:00:00.000Z
+        '400':
+          description: Requisição inválida
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                missingFile:
+                  value:
+                    message: Arquivo não enviado.
+                unsupportedFileType:
+                  value:
+                    message: Tipo de arquivo não permitido.
+        '403':
+          description: Regra de ownership violada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                ownerMismatch:
+                  value:
+                    message: O owner informado difere do usuário autenticado.
+        '413':
+          description: Arquivo acima do limite permitido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                fileTooLarge:
+                  value:
+                    message: Arquivo excede o limite de 10 MB.
+        '500':
+          description: Erro interno
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                internalError:
+                  value:
+                    message: Erro interno ao fazer upload.
+
+  /documents:
+    get:
+      tags:
+        - Documents
+      summary: Lista os documentos cadastrados
+      operationId: listDocuments
+      description: Retorna apenas documentos do usuário indicado em `x-user-id` (ou `anonymous`).
+      parameters:
+        - name: x-user-id
+          in: header
+          required: false
+          description: Identificador opcional do usuário para escopo dos documentos.
+          schema:
+            type: string
+          example: ana.silva
+      responses:
+        '200':
+          description: Lista de documentos
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Document'
+              examples:
+                success:
+                  value:
+                    - id: 550e8400-e29b-41d4-a716-446655440000
+                      originalName: contrato.pdf
+                      storedName: 1722859200000-123456789.pdf
+                      mimeType: application/pdf
+                      size: 245678
+                      owner: ana.silva
+                      uploadedAt: 2026-08-05T12:00:00.000Z
+        '500':
+          description: Erro interno
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                internalError:
+                  value:
+                    message: Erro interno ao listar documentos.
+
+  /documents/{id}/download:
+    get:
+      tags:
+        - Documents
+      summary: Faz download de um documento
+      operationId: downloadDocument
+      parameters:
+        - name: x-user-id
+          in: header
+          required: false
+          description: Identificador opcional do usuário dono do documento.
+          schema:
+            type: string
+          example: ana.silva
+        - name: id
+          in: path
+          required: true
+          description: Identificador do documento.
+          schema:
+            type: string
+            format: uuid
+          example: 550e8400-e29b-41d4-a716-446655440000
+      responses:
+        '200':
+          description: Arquivo do documento
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '400':
+          description: Requisição inválida
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                invalidId:
+                  value:
+                    message: ID do documento inválido.
+        '403':
+          description: Usuário sem permissão para baixar o documento
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                forbidden:
+                  value:
+                    message: Acesso negado a este documento.
+        '404':
+          description: Documento ou arquivo não encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                documentNotFound:
+                  value:
+                    message: Documento não encontrado.
+                fileMissing:
+                  value:
+                    message: Arquivo do documento não está disponível.
+        '500':
+          description: Erro interno
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                internalError:
+                  value:
+                    message: Erro interno ao baixar documento.
+
+components:
+  schemas:
+    Document:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Identificador único do documento.
+        originalName:
+          type: string
+          description: Nome original enviado pelo usuário.
+        storedName:
+          type: string
+          description: Nome físico gerado para o arquivo no storage local.
+        mimeType:
+          type: string
+          description: Tipo MIME detectado no upload.
+        size:
+          type: integer
+          minimum: 0
+          description: Tamanho do arquivo em bytes.
+        owner:
+          type: string
+          description: Dono associado ao documento.
+        uploadedAt:
+          type: string
+          format: date-time
+          description: Data e hora do upload em ISO 8601.
+      required:
+        - id
+        - originalName
+        - storedName
+        - mimeType
+        - size
+        - owner
+        - uploadedAt
+      examples:
+        document:
+          value:
+            id: 550e8400-e29b-41d4-a716-446655440000
+            originalName: contrato.pdf
+            storedName: 1722859200000-123456789.pdf
+            mimeType: application/pdf
+            size: 245678
+            owner: ana.silva
+            uploadedAt: 2026-08-05T12:00:00.000Z
+
+    ErrorResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        message:
+          type: string
+          description: Mensagem descritiva do erro.
+      required:
+        - message
+      examples:
+        error:
+          value:
+            message: Erro interno ao processar a requisição.
